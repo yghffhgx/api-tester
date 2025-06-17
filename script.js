@@ -45,6 +45,7 @@ const aspectRatioGroup = document.getElementById('aspect-ratio-group');
 const videoDurationInput = document.getElementById('video-duration');
 const outputVideo = document.getElementById('output-video');
 const downloadVideoBtn = document.getElementById('download-video-btn');
+const loadingIndicator = document.getElementById('loading-indicator'); // Added
 let recordedChunks = [];
 let mediaRecorder;
 let lastRequestPayload = null; // Variable to store the last request payload
@@ -73,7 +74,10 @@ const modelContainer = document.getElementById('model-container');
 const modelContainerOriginalParent = modelContainer.parentNode;
 const modelContainerOriginalNextSibling = modelContainer.nextElementSibling;
 
-// --- Storage Helpers (with fallback to localStorage when not in Electron) ---
+// --- STORAGE HELPERS ---
+// These functions handle getting and setting values in Electron store or localStorage.
+// They are used by the settings persistence functions.
+
 async function getStoredValue(key) {
     // Try Electron Store first
     if (window.electronAPI && window.electronAPI.getStoreValue) {
@@ -118,8 +122,9 @@ async function setStoredValue(key, value) {
     }
 }
 
+// --- SETTINGS PERSISTENCE ---
+// Functions for loading and saving user settings and API credentials.
 
-// --- Settings Persistence ---
 const API_CREDENTIALS_KEY_PREFIX = 'apiCredentials';
 const LAST_PROVIDER_KEY = 'lastProvider';
 const LAST_MODEL_KEY = 'lastModel';
@@ -135,6 +140,114 @@ const LAST_VOICE_KEY = 'lastVoice';
 const LAST_VIDEO_DURATION_KEY = 'lastVideoDuration';
 const LAST_VIDEO_ASPECT_RATIO_ENABLED_KEY = 'lastVideoAspectRatioEnabled';
 const LAST_VIDEO_ASPECT_RATIO_KEY = 'lastVideoAspectRatio';
+
+// Loads API credentials for the given provider from storage.
+async function loadProviderCredentials(provider) {
+    if (!provider) return;
+    const credentials = await getStoredValue(`${API_CREDENTIALS_KEY_PREFIX}.${provider}`);
+    if (credentials) {
+        apiKeyInput.value = credentials.apiKey || '';
+        if (baseUrlInput) { // Check if baseUrlInput exists
+            baseUrlInput.value = credentials.baseUrl || '';
+        }
+    } else {
+        apiKeyInput.value = '';
+        if (baseUrlInput) {
+            baseUrlInput.value = '';
+        }
+    }
+    toggleBaseUrlInput(); // Ensure visibility is correct after loading
+}
+
+// Saves API credentials for the given provider to storage.
+async function saveProviderCredentials(provider) {
+    if (!provider) return;
+    const apiKey = apiKeyInput.value;
+    const baseUrl = baseUrlInput ? baseUrlInput.value : ''; // Check if baseUrlInput exists
+    await setStoredValue(`${API_CREDENTIALS_KEY_PREFIX}.${provider}`, { apiKey, baseUrl });
+}
+
+// Loads general application settings from storage.
+async function loadGeneralSettings() {
+    const lastProvider = await getStoredValue(LAST_PROVIDER_KEY);
+    if (lastProvider) providerSelect.value = lastProvider;
+
+    modelInput.value = await getStoredValue(LAST_MODEL_KEY) || 'gpt-4o'; // Default model
+    promptInput.value = await getStoredValue(LAST_PROMPT_KEY) || '';
+
+    const lastGenerationType = await getStoredValue(LAST_GENERATION_TYPE_KEY);
+    if (lastGenerationType) {
+        const radio = document.querySelector(`input[name="generation-type"][value="${lastGenerationType}"]`);
+        if (radio) radio.checked = true;
+    }
+
+    const lastEnableQuality = await getStoredValue(LAST_ENABLE_QUALITY_KEY);
+    if (enableQualityCheckbox) { // Check if exists
+        enableQualityCheckbox.checked = typeof lastEnableQuality === 'boolean' ? lastEnableQuality : true; // Default to true
+    }
+
+    const lastQuality = await getStoredValue(LAST_IMAGE_QUALITY_KEY);
+    if (qualitySelect) { // Check if exists
+        qualitySelect.value = lastQuality || 'standard'; // Default quality
+    }
+
+    const lastCustomQuality = await getStoredValue(LAST_CUSTOM_IMAGE_QUALITY_KEY);
+    if (customQualityInput) { // Check if exists
+        customQualityInput.value = lastCustomQuality || '';
+    }
+
+
+    if (imageWidthInput) imageWidthInput.value = await getStoredValue(LAST_IMAGE_WIDTH_KEY) || '1024';
+    if (imageHeightInput) imageHeightInput.value = await getStoredValue(LAST_IMAGE_HEIGHT_KEY) || '1024';
+
+    const lastAudioType = await getStoredValue(LAST_AUDIO_TYPE_KEY);
+    if (audioTypeSelect) { // Check if exists
+         audioTypeSelect.value = lastAudioType || 'tts';
+    }
+
+    if (voiceInput) voiceInput.value = await getStoredValue(LAST_VOICE_KEY) || 'alloy';
+
+    // Load video settings
+    if (videoDurationInput) videoDurationInput.value = await getStoredValue(LAST_VIDEO_DURATION_KEY) || '5';
+
+    const lastVideoAspectRatioEnabled = await getStoredValue(LAST_VIDEO_ASPECT_RATIO_ENABLED_KEY);
+    if (videoAspectRatioEnabled) {
+        videoAspectRatioEnabled.checked = typeof lastVideoAspectRatioEnabled === 'boolean' ? lastVideoAspectRatioEnabled : false;
+    }
+
+    const lastVideoAspectRatio = await getStoredValue(LAST_VIDEO_ASPECT_RATIO_KEY);
+    if (videoAspectRatioSelect) {
+        videoAspectRatioSelect.value = lastVideoAspectRatio || '16:9';
+    }
+
+    toggleGenerationOptions(); // Update UI based on loaded settings
+    toggleBaseUrlInput(); // Ensure base URL visibility
+}
+
+// Saves general application settings to storage.
+async function saveGeneralSettings() {
+    await setStoredValue(LAST_PROVIDER_KEY, providerSelect.value);
+    await setStoredValue(LAST_MODEL_KEY, modelInput.value);
+    await setStoredValue(LAST_PROMPT_KEY, promptInput.value);
+    const generationType = document.querySelector('input[name="generation-type"]:checked');
+    if (generationType) await setStoredValue(LAST_GENERATION_TYPE_KEY, generationType.value);
+
+    if (enableQualityCheckbox) await setStoredValue(LAST_ENABLE_QUALITY_KEY, enableQualityCheckbox.checked);
+    if (qualitySelect) await setStoredValue(LAST_IMAGE_QUALITY_KEY, qualitySelect.value);
+    if (customQualityInput) await setStoredValue(LAST_CUSTOM_IMAGE_QUALITY_KEY, customQualityInput.value);
+    if (imageWidthInput) await setStoredValue(LAST_IMAGE_WIDTH_KEY, imageWidthInput.value);
+    if (imageHeightInput) await setStoredValue(LAST_IMAGE_HEIGHT_KEY, imageHeightInput.value);
+    if (audioTypeSelect) await setStoredValue(LAST_AUDIO_TYPE_KEY, audioTypeSelect.value);
+    if (voiceInput) await setStoredValue(LAST_VOICE_KEY, voiceInput.value);
+
+    // Save video settings
+    if (videoDurationInput) await setStoredValue(LAST_VIDEO_DURATION_KEY, videoDurationInput.value);
+    if (videoAspectRatioEnabled) await setStoredValue(LAST_VIDEO_ASPECT_RATIO_ENABLED_KEY, videoAspectRatioEnabled.checked);
+    if (videoAspectRatioSelect) await setStoredValue(LAST_VIDEO_ASPECT_RATIO_KEY, videoAspectRatioSelect.value);
+}
+
+// --- THEME MANAGEMENT ---
+// Functions related to theme (dark/light/system) management.
 
 const THEME_SETTING_KEY = 'userTheme'; // 'system', 'light', 'dark'
 
@@ -174,6 +287,7 @@ function setupSystemThemeListener(callback) {
     }
 }
 
+// Applies the selected theme to the document body and updates UI buttons.
 async function applyTheme(themeToApply, osShouldUseDark) {
     console.log('Applying theme:', { themeToApply, osShouldUseDark });
     if (themeToApply === 'system') {
@@ -198,6 +312,8 @@ async function applyTheme(themeToApply, osShouldUseDark) {
     }
 }
 
+// Initializes the theme based on stored preferences or system settings.
+// Handles both Electron and browser environments.
 async function initializeTheme() {
     // Setup for when we're in Electron environment
     if (window.electronAPI && window.electronAPI.onThemeUpdated && window.electronAPI.setThemePreference && window.electronAPI.getThemePreference) {
@@ -280,106 +396,8 @@ async function initializeTheme() {
     }
 }
 
-async function loadProviderCredentials(provider) {
-    if (!provider) return;
-    const credentials = await getStoredValue(`${API_CREDENTIALS_KEY_PREFIX}.${provider}`);
-    if (credentials) {
-        apiKeyInput.value = credentials.apiKey || '';
-        if (baseUrlInput) { // Check if baseUrlInput exists
-            baseUrlInput.value = credentials.baseUrl || '';
-        }
-    } else {
-        apiKeyInput.value = '';
-        if (baseUrlInput) {
-            baseUrlInput.value = '';
-        }
-    }
-    toggleBaseUrlInput(); // Ensure visibility is correct after loading
-}
-
-async function saveProviderCredentials(provider) {
-    if (!provider) return;
-    const apiKey = apiKeyInput.value;
-    const baseUrl = baseUrlInput ? baseUrlInput.value : ''; // Check if baseUrlInput exists
-    await setStoredValue(`${API_CREDENTIALS_KEY_PREFIX}.${provider}`, { apiKey, baseUrl });
-}
-
-async function loadGeneralSettings() {
-    const lastProvider = await getStoredValue(LAST_PROVIDER_KEY);
-    if (lastProvider) providerSelect.value = lastProvider;
-
-    modelInput.value = await getStoredValue(LAST_MODEL_KEY) || 'gpt-4o'; // Default model
-    promptInput.value = await getStoredValue(LAST_PROMPT_KEY) || '';
-
-    const lastGenerationType = await getStoredValue(LAST_GENERATION_TYPE_KEY);
-    if (lastGenerationType) {
-        const radio = document.querySelector(`input[name="generation-type"][value="${lastGenerationType}"]`);
-        if (radio) radio.checked = true;
-    }
-
-    const lastEnableQuality = await getStoredValue(LAST_ENABLE_QUALITY_KEY);
-    if (enableQualityCheckbox) { // Check if exists
-        enableQualityCheckbox.checked = typeof lastEnableQuality === 'boolean' ? lastEnableQuality : true; // Default to true
-    }
-    
-    const lastQuality = await getStoredValue(LAST_IMAGE_QUALITY_KEY);
-    if (qualitySelect) { // Check if exists
-        qualitySelect.value = lastQuality || 'standard'; // Default quality
-    }
-    
-    const lastCustomQuality = await getStoredValue(LAST_CUSTOM_IMAGE_QUALITY_KEY);
-    if (customQualityInput) { // Check if exists
-        customQualityInput.value = lastCustomQuality || '';
-    }
-
-
-    if (imageWidthInput) imageWidthInput.value = await getStoredValue(LAST_IMAGE_WIDTH_KEY) || '1024';
-    if (imageHeightInput) imageHeightInput.value = await getStoredValue(LAST_IMAGE_HEIGHT_KEY) || '1024';
-    
-    const lastAudioType = await getStoredValue(LAST_AUDIO_TYPE_KEY);
-    if (audioTypeSelect) { // Check if exists
-         audioTypeSelect.value = lastAudioType || 'tts';
-    }
-
-    if (voiceInput) voiceInput.value = await getStoredValue(LAST_VOICE_KEY) || 'alloy';
-
-    // Load video settings
-    if (videoDurationInput) videoDurationInput.value = await getStoredValue(LAST_VIDEO_DURATION_KEY) || '5';
-    
-    const lastVideoAspectRatioEnabled = await getStoredValue(LAST_VIDEO_ASPECT_RATIO_ENABLED_KEY);
-    if (videoAspectRatioEnabled) {
-        videoAspectRatioEnabled.checked = typeof lastVideoAspectRatioEnabled === 'boolean' ? lastVideoAspectRatioEnabled : false;
-    }
-    
-    const lastVideoAspectRatio = await getStoredValue(LAST_VIDEO_ASPECT_RATIO_KEY);
-    if (videoAspectRatioSelect) {
-        videoAspectRatioSelect.value = lastVideoAspectRatio || '16:9';
-    }
-
-    toggleGenerationOptions(); // Update UI based on loaded settings
-    toggleBaseUrlInput(); // Ensure base URL visibility
-}
-
-async function saveGeneralSettings() {
-    await setStoredValue(LAST_PROVIDER_KEY, providerSelect.value);
-    await setStoredValue(LAST_MODEL_KEY, modelInput.value);
-    await setStoredValue(LAST_PROMPT_KEY, promptInput.value);
-    const generationType = document.querySelector('input[name="generation-type"]:checked');
-    if (generationType) await setStoredValue(LAST_GENERATION_TYPE_KEY, generationType.value);
-    
-    if (enableQualityCheckbox) await setStoredValue(LAST_ENABLE_QUALITY_KEY, enableQualityCheckbox.checked);
-    if (qualitySelect) await setStoredValue(LAST_IMAGE_QUALITY_KEY, qualitySelect.value);
-    if (customQualityInput) await setStoredValue(LAST_CUSTOM_IMAGE_QUALITY_KEY, customQualityInput.value);
-    if (imageWidthInput) await setStoredValue(LAST_IMAGE_WIDTH_KEY, imageWidthInput.value);
-    if (imageHeightInput) await setStoredValue(LAST_IMAGE_HEIGHT_KEY, imageHeightInput.value);
-    if (audioTypeSelect) await setStoredValue(LAST_AUDIO_TYPE_KEY, audioTypeSelect.value);
-    if (voiceInput) await setStoredValue(LAST_VOICE_KEY, voiceInput.value);
-    
-    // Save video settings
-    if (videoDurationInput) await setStoredValue(LAST_VIDEO_DURATION_KEY, videoDurationInput.value);
-    if (videoAspectRatioEnabled) await setStoredValue(LAST_VIDEO_ASPECT_RATIO_ENABLED_KEY, videoAspectRatioEnabled.checked);
-    if (videoAspectRatioSelect) await setStoredValue(LAST_VIDEO_ASPECT_RATIO_KEY, videoAspectRatioSelect.value);
-}
+// --- UI MANIPULATION ---
+// Functions that control the visibility and state of UI elements.
 
 // Function to show or hide the Base URL input based on the selected provider
 function toggleBaseUrlInput() {
@@ -389,19 +407,6 @@ function toggleBaseUrlInput() {
         baseUrlInput.value = ''; // Clear the input if hidden
     }
 }
-
-// Add an event listener to the provider select dropdown
-providerSelect.addEventListener('change', async () => {
-    // Save credentials for the PREVIOUS provider
-    // To get the previous provider, we need to be careful as the value has already changed.
-    // This is a bit tricky. A better way would be to store the previous value before it changes.
-    // For now, we'll rely on loading to implicitly handle this,
-    // but saving on 'input' for API key/base URL is more robust.
-    // Let's call saveGeneralSettings which saves the new provider.
-    await saveGeneralSettings();
-    await loadProviderCredentials(providerSelect.value);
-    toggleBaseUrlInput(); // Original line, good to keep
-});
 
 // Function to show/hide image-specific options
 function toggleGenerationOptions() {
@@ -486,12 +491,6 @@ function toggleGenerationOptions() {
       modelContainerOriginalParent.insertBefore(modelContainer, modelContainerOriginalNextSibling);
   }
 }
-
-// Add event listeners to radio buttons to toggle image options
-document.querySelectorAll('input[name="generation-type"]').forEach(radio => {
-    radio.addEventListener('change', toggleGenerationOptions);
-});
-audioTypeSelect.addEventListener('change', toggleGenerationOptions);
 
 // Microphone permission status
 let microphonePermissionStatus = 'prompt'; // 'granted', 'denied', 'prompt'
@@ -587,67 +586,11 @@ function updateMicrophoneUI() {
     }
 }
 
-// Single button recorder toggle
-recordBtn.addEventListener('click', async () => {
-    if (!mediaRecorder || mediaRecorder.state === 'inactive') {
-        // Start recording
-        recordedChunks = [];
-        try {
-            // Request microphone access
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            
-            // Update permission status since it was successful
-            microphonePermissionStatus = 'granted';
-            updateMicrophoneUI();
-            
-            mediaRecorder = new MediaRecorder(stream);
-            mediaRecorder.ondataavailable = e => {
-                if (e.data.size > 0) recordedChunks.push(e.data);
-            };
-            mediaRecorder.onstop = () => {
-                const blob = new Blob(recordedChunks, { type: 'audio/webm' });
-                const url = URL.createObjectURL(blob);
-                recordingPreview.src = url;
-                recordingPreview.style.display = 'block';
-                // Update record button label
-                recordBtn.textContent = 'Start Recording';
-                
-                // Stop all tracks to release the microphone
-                stream.getTracks().forEach(track => track.stop());
-            };
-            mediaRecorder.start();
-            recordBtn.textContent = 'Stop Recording';
-            recordingPreview.style.display = 'none';
-        } catch (err) {
-            microphonePermissionStatus = 'denied';
-            updateMicrophoneUI();
-            displayError('Microphone access denied or unavailable.');
-        }
-    } else {
-        // Stop recording
-        mediaRecorder.stop();
-    }
-});
-enableQualityCheckbox.addEventListener('change', () => {
-    if (qualityOptionsContainer) {
-        qualityOptionsContainer.style.display = enableQualityCheckbox.checked ? 'block' : 'none';
-    }
-    if (customQualityInput) {
-        customQualityInput.style.display = 'none';
-    }
-});
 
-// Show/hide custom quality input when 'custom' option is selected
-qualitySelect.addEventListener('change', () => {
-    if (enableQualityCheckbox.checked && qualitySelect.value === 'custom' && customQualityInput) {
-        customQualityInput.style.display = 'block';
-    } else if (customQualityInput) {
-        customQualityInput.style.display = 'none';
-    }
-});
+// --- HELPER FUNCTIONS ---
+// Utility functions used by other parts of the script.
 
-
-// --- Helper to display errors ---
+// Displays an error message in the output area.
 function displayError(message) {
     console.error('Error:', message);
 
@@ -680,7 +623,7 @@ function displayError(message) {
     outputArea.style.borderColor = 'red';
 }
 
-// --- Clear Output ---
+// Clears the output area, stats, and resets payload/response displays.
 function clearOutput() {
     outputText.innerHTML = '';
     outputImage.style.display = 'none';
@@ -708,10 +651,62 @@ function clearOutput() {
     toggleResponseBtn.classList.remove('active');
     lastRequestPayload = null; // Reset stored payload
     lastApiResponse = null;    // Reset stored response
+    if (loadingIndicator) hideLoader(); // Ensure loader is hidden
 }
 
-// --- API Call Logic for Text ---
+// --- LOADER FUNCTIONS ---
+// Functions to show and hide the loading indicator.
+function showLoader() {
+    if (loadingIndicator) loadingIndicator.style.display = 'flex';
+}
+
+function hideLoader() {
+    if (loadingIndicator) loadingIndicator.style.display = 'none';
+}
+
+// --- API RESPONSE HELPER ---
+// Handles common API response processing tasks like JSON parsing and error checking.
+async function handleApiResponse(response) {
+    // Clone the response to read JSON and still have response object available if needed
+    const responseClone = response.clone();
+    let data;
+    try {
+        data = await response.json();
+        lastApiResponse = JSON.stringify(data, null, 2); // Store the successful JSON response
+    } catch (jsonError) {
+        console.error("Failed to parse JSON response:", jsonError);
+        const textResponse = await responseClone.text(); // Try getting text if JSON fails
+        lastApiResponse = `Response was not valid JSON:\n${textResponse}`; // Store raw text response
+        // If response.ok is true, but JSON parsing failed, we still want to throw an error
+        // because we expected JSON. If response.ok is false, the error thrown below will include this.
+        if (response.ok) {
+            throw new Error("Received OK response but failed to parse JSON content. Raw response: " + textResponse);
+        }
+        data = null; // Indicate that data parsing failed
+    }
+
+    if (!response.ok) {
+        // If response was not ok, lastApiResponse (set above) contains text/JSON error details if available
+        // Otherwise, construct a generic error.
+        const errorMsg = data?.error?.message || data?.detail || (typeof lastApiResponse === 'string' && lastApiResponse.startsWith('Response was not valid JSON:') ? lastApiResponse : null) || `HTTP Error ${response.status}`;
+        throw new Error(errorMsg);
+    }
+
+    // If response is ok but data parsing failed earlier (and wasn't caught by the explicit throw above)
+    // This case should ideally be covered, but as a safeguard:
+    if (data === null && response.ok) {
+         throw new Error("Received OK response but failed to parse JSON content, and data is null.");
+    }
+    return data;
+}
+
+
+// --- API CALLS ---
+// Functions responsible for making API calls to different providers and generation types.
+
+// Handles text generation API calls.
 async function callTextApi(provider, apiKey, baseUrl, model, prompt) {
+    showLoader(); // Show loader at the start
     clearOutput();
     outputText.innerHTML = 'Sending text request...';
     outputArea.style.display = 'block';
@@ -725,19 +720,24 @@ async function callTextApi(provider, apiKey, baseUrl, model, prompt) {
         case 'openai':
             apiUrl = 'https://api.openai.com/v1/chat/completions';
             headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` };
-            body = { model: model, messages: [{ role: 'user', content: prompt }], stream: false };
+            // Enable streaming for OpenAI
+            body = { model: model, messages: [{ role: 'user', content: prompt }], stream: true };
             break;
         case 'deepseek':
             apiUrl = 'https://api.deepseek.com/chat/completions';
             headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` };
-            body = { model: model, messages: [{ role: 'user', content: prompt }], stream: false };
+            body = { model: model, messages: [{ role: 'user', content: prompt }], stream: false }; // Deepseek might not support streaming or require different handling
             break;
         case 'openai_compatible':
-            if (!baseUrl) return displayError('Base URL is required for OpenAI Compatible provider.');
+            if (!baseUrl) {
+                hideLoader(); // Hide loader if exiting early
+                return displayError('Base URL is required for OpenAI Compatible provider.');
+            }
             const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
             apiUrl = `${cleanBaseUrl}/chat/completions`;
             headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` };
-            body = { model: model, messages: [{ role: 'user', content: prompt }], stream: false };
+            // Enable streaming for OpenAI compatible
+            body = { model: model, messages: [{ role: 'user', content: prompt }], stream: true };
             break;
         case 'claude':
             apiUrl = 'https://api.anthropic.com/v1/messages';
@@ -769,81 +769,134 @@ async function callTextApi(provider, apiKey, baseUrl, model, prompt) {
         const endTime = performance.now(); // Record end time
         const durationInSeconds = (endTime - startTime) / 1000;
 
-        // Clone the response to read JSON and still have response object available if needed
-        const responseClone = response.clone();
-        let data;
-        try {
-            data = await response.json(); 
-            lastApiResponse = JSON.stringify(data, null, 2); // Store the successful JSON response
-        } catch (jsonError) {
-            console.error("Failed to parse JSON response:", jsonError);
-            const textResponse = await responseClone.text(); // Try getting text if JSON fails
-            lastApiResponse = `Response was not valid JSON:\n${textResponse}`;
-            data = null; // Indicate that data parsing failed
-        }
-        
-        console.log("Text API Response Data:", data);
+        if (body.stream && (provider === 'openai' || provider === 'openai_compatible')) {
+            // Handle streaming response
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder("utf-8");
+            outputText.innerHTML = `<strong>${model}:</strong><br>`; // Initialize output area
+            outputArea.style.borderColor = '#ccc'; // Reset border color
+            let contentBuffer = "";
+            let accumulatedResponse = "";
 
-        if (!response.ok) {
-            // If response was not ok, lastApiResponse already contains text/JSON error
-            const errorMsg = data?.error?.message || data?.detail || lastApiResponse || `HTTP Error ${response.status}`;
-            throw new Error(errorMsg);
-        }
+            async function processStream() {
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) {
+                        statsArea.innerHTML = `<span><strong>Time:</strong> ${durationInSeconds.toFixed(2)}s</span><br><span>Stream complete. Usage data is typically not available for streamed responses.</span>`;
+                        statsArea.style.display = 'block';
+                        // Ensure any final buffered content is displayed (though typically not needed with SSE)
+                        if (accumulatedResponse.startsWith("data: ")) { // Check if remaining buffer is a data line
+                            // Process final chunk if any - similar to loop logic
+                             const jsonStr = accumulatedResponse.substring(6).trim();
+                             if (jsonStr && jsonStr !== "[DONE]") {
+                                 try {
+                                     const parsed = JSON.parse(jsonStr);
+                                     if (parsed.choices && parsed.choices[0] && parsed.choices[0].delta && parsed.choices[0].delta.content) {
+                                         const textChunk = parsed.choices[0].delta.content;
+                                         outputText.innerHTML += textChunk.replace(/\n/g, '<br>');
+                                     }
+                                 } catch (e) {
+                                     console.warn("Error parsing final streamed JSON chunk:", e, "Chunk:", jsonStr);
+                                 }
+                             }
+                        }
+                        break;
+                    }
 
-        // If response is ok but data parsing failed earlier
-        if (!data) {
-             throw new Error("Received OK response but failed to parse JSON content.");
-        }
+                    accumulatedResponse += decoder.decode(value, { stream: true });
+                    let lines = accumulatedResponse.split('\n');
+                    accumulatedResponse = lines.pop() || ""; // Keep incomplete line for next chunk, ensure it's a string
 
-        // Extract content
-        let aiContent = '';
-        if (provider === 'claude') {
-            if (data.content && data.content.length > 0 && data.content[0].text) aiContent = data.content[0].text;
-            else throw new Error('Could not find text content in Claude response.');
-        } else { // OpenAI/Compatible/Deepseek/OpenRouter
-            if (data.choices && data.choices.length > 0 && data.choices[0].message && data.choices[0].message.content) aiContent = data.choices[0].message.content;
-            else throw new Error('Could not find message content in API response.');
-        }
+                    for (const line of lines) {
+                        if (line.startsWith("data: ")) {
+                            const jsonStr = line.substring(6).trim();
+                            if (jsonStr === "[DONE]") {
+                                statsArea.innerHTML = `<span><strong>Time:</strong> ${durationInSeconds.toFixed(2)}s</span><br><span>Stream finished. Usage data for streamed responses may differ or be unavailable.</span>`;
+                                statsArea.style.display = 'block';
+                                return; // Exit processing loop
+                            }
+                            try {
+                                const parsed = JSON.parse(jsonStr);
+                                if (parsed.choices && parsed.choices[0] && parsed.choices[0].delta && parsed.choices[0].delta.content) {
+                                    const textChunk = parsed.choices[0].delta.content;
+                                    contentBuffer += textChunk;
+                                    outputText.innerHTML += textChunk.replace(/\n/g, '<br>');
+                                }
+                                // Store the raw choices if needed for other processing (e.g. finish_reason)
+                                if (parsed.choices && parsed.choices[0] && parsed.choices[0].finish_reason){
+                                    console.log("Stream finished with reason: ", parsed.choices[0].finish_reason);
+                                    // Could update stats here if reason is 'stop' or similar
+                                }
+                            } catch (e) {
+                                console.warn("Error parsing streamed JSON chunk:", e, "Chunk:", jsonStr);
+                            }
+                        } else if (line.trim().length > 0 && !line.includes("data: ")) { // Log non-data lines if they are not empty
+                            console.log("Received non-data line in stream:", line);
+                        }
+                    }
+                }
+            }
+            await processStream();
+            lastApiResponse = contentBuffer; // Store accumulated content as the "response" for display if needed
 
-        // Display the AI response
-        outputText.innerHTML = `<strong>${model}:</strong><br>${aiContent.replace(/\n/g, '<br>')}`;
-        outputArea.style.borderColor = '#ccc';
+        } else {
+            // Existing non-streaming logic
+            const data = await handleApiResponse(response); // handleApiResponse is for non-streaming
+            console.log("Text API Response Data (Non-Streaming):", data);
+            lastApiResponse = JSON.stringify(data, null, 2); // Keep this for non-streaming
 
-        // Calculate and display stats if usage data is available
-        if (data.usage) {
-            const usage = data.usage;
-            const promptTokens = usage.prompt_tokens || 0;
-            const completionTokens = usage.completion_tokens || 0;
-            const totalTokens = usage.total_tokens || (promptTokens + completionTokens); // Calculate if not provided
-            let tokensPerSecond = 0;
-
-            if (durationInSeconds > 0 && completionTokens > 0) {
-                tokensPerSecond = (completionTokens / durationInSeconds).toFixed(2);
+            // Extract content
+            let aiContent = '';
+            if (provider === 'claude') {
+                if (data.content && data.content.length > 0 && data.content[0].text) aiContent = data.content[0].text;
+                else throw new Error('Could not find text content in Claude response.');
+            } else { // OpenAI/Compatible (non-streaming), Deepseek, OpenRouter
+                if (data.choices && data.choices.length > 0 && data.choices[0].message && data.choices[0].message.content) aiContent = data.choices[0].message.content;
+                else throw new Error('Could not find message content in API response.');
             }
 
-            statsArea.innerHTML = `
-                <span><strong>Time:</strong> ${durationInSeconds.toFixed(2)}s</span>
-                <span><strong>Tokens/Sec:</strong> ${tokensPerSecond}</span>
-                <span><strong>Prompt Tokens:</strong> ${promptTokens}</span>
-                <span><strong>Completion Tokens:</strong> ${completionTokens}</span>
-                <span><strong>Total Tokens:</strong> ${totalTokens}</span>
-            `;
-            statsArea.style.display = 'block';
-        } else {
-             statsArea.innerHTML = '<span>Usage data not available in response.</span>'; // Indicate missing data
-             statsArea.style.display = 'block';
-        }
+            // Display the AI response
+            outputText.innerHTML = `<strong>${model}:</strong><br>${aiContent.replace(/\n/g, '<br>')}`;
+            outputArea.style.borderColor = '#ccc';
 
+            // Calculate and display stats if usage data is available
+            if (data.usage) {
+                const usage = data.usage;
+                const promptTokens = usage.prompt_tokens || 0;
+                const completionTokens = usage.completion_tokens || 0;
+                const totalTokens = usage.total_tokens || (promptTokens + completionTokens);
+                let tokensPerSecond = 0;
+
+                if (durationInSeconds > 0 && completionTokens > 0) {
+                    tokensPerSecond = (completionTokens / durationInSeconds).toFixed(2);
+                }
+
+                statsArea.innerHTML = `
+                    <span><strong>Time:</strong> ${durationInSeconds.toFixed(2)}s</span>
+                    <span><strong>Tokens/Sec:</strong> ${tokensPerSecond}</span>
+                    <span><strong>Prompt Tokens:</strong> ${promptTokens}</span>
+                    <span><strong>Completion Tokens:</strong> ${completionTokens}</span>
+                    <span><strong>Total Tokens:</strong> ${totalTokens}</span>
+                `;
+                statsArea.style.display = 'block';
+            } else {
+                 statsArea.innerHTML = `<span><strong>Time:</strong> ${durationInSeconds.toFixed(2)}s</span><br><span>Usage data not available in response.</span>`;
+                 statsArea.style.display = 'block';
+            }
+        }
 
     } catch (error) {
         // lastApiResponse might contain error details already
-        displayError(error.message);
+        displayError(error.message); // displayError will hide loader
         statsArea.style.display = 'none'; // Hide stats on error
+    } finally {
+        hideLoader(); // Ensure loader is hidden
     }
 }
 
-// --- API Call Logic for Images (OpenAI DALL-E Example) ---
+// Handles image generation API calls.
 async function callImageApi(provider, apiKey, baseUrl, model, prompt) {
+    showLoader(); // Show loader at the start
     clearOutput();
     outputText.innerHTML = 'Sending image request...'; // Use text area for status
     outputArea.style.display = 'block';
@@ -903,28 +956,8 @@ async function callImageApi(provider, apiKey, baseUrl, model, prompt) {
         const endTime = performance.now();
         const durationInSeconds = ((endTime - startTime) / 1000).toFixed(2);
 
-        const responseClone = response.clone();
-        let data;
-        try {
-            data = await response.json();
-            lastApiResponse = JSON.stringify(data, null, 2);
-        } catch (jsonError) {
-            console.error("Failed to parse JSON response:", jsonError);
-            const textResponse = await responseClone.text();
-            lastApiResponse = `Response was not valid JSON:\n${textResponse}`;
-            data = null;
-        }
-
+        const data = await handleApiResponse(response);
         console.log("Image API Response Data:", data);
-
-        if (!response.ok) {
-            const errorMsg = data?.error?.message || lastApiResponse || `HTTP Error ${response.status}`;
-            throw new Error(errorMsg);
-        }
-
-        if (!data) {
-            throw new Error("Received OK response but failed to parse JSON content.");
-        }
 
         // Extract image (URL or base64) and show stats
         if (data.data && data.data.length > 0) {
@@ -1011,26 +1044,16 @@ async function callImageApi(provider, apiKey, baseUrl, model, prompt) {
                 const retryEndTime = performance.now();
                 const retryDuration = ((retryEndTime - retryStartTime) / 1000).toFixed(2);
                 
-                const retryResponseClone = retryResponse.clone();
-                let retryData;
-                try {
-                    retryData = await retryResponse.json();
-                    lastApiResponse = JSON.stringify(retryData, null, 2); // Store retry response
-                } catch (retryJsonError) {
-                    console.error("Failed to parse JSON response on retry:", retryJsonError);
-                    const retryTextResponse = await retryResponseClone.text();
-                    lastApiResponse = `Retry response was not valid JSON:\n${retryTextResponse}`;
-                    retryData = null;
-                }
+                const retryResponse = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify(fallbackBody)
+                });
+                const retryEndTime = performance.now();
+                const retryDuration = ((retryEndTime - retryStartTime) / 1000).toFixed(2);
+
+                const retryData = await handleApiResponse(retryResponse); // Use helper for retry
                 
-                if (!retryResponse.ok) {
-                    const errMsg2 = retryData?.error?.message || lastApiResponse || `HTTP Error ${retryResponse.status}`;
-                    throw new Error(errMsg2);
-                }
-                
-                if (!retryData) {
-                    throw new Error("Received OK retry response but failed to parse JSON content.");
-                }
                 // Extract image URL
                 if (retryData.data && retryData.data.length > 0 && retryData.data[0].url) {
                     const imageUrl2 = retryData.data[0].url;
@@ -1071,14 +1094,19 @@ async function callImageApi(provider, apiKey, baseUrl, model, prompt) {
                 return;
             }
         } else {
-            displayError(error.message);
+            displayError(error.message); // displayError will hide loader
+        }
+    } finally {
+        // Ensure loader is hidden if not already by error handling or success
+        if (!error.message.includes('Invalid quality')) { // Avoid double hide if retry happens
+             hideLoader();
         }
     }
 }
 
-
-// --- API Call Logic for Audio ---
+// Handles Text-to-Speech (TTS) API calls.
 async function callTtsApi(provider, apiKey, baseUrl, model, text, voice) {
+    showLoader(); // Show loader at the start
     clearOutput();
     outputText.innerHTML = 'Generating TTS...';
     outputAudio.style.display = 'none';
@@ -1179,15 +1207,16 @@ async function callTtsApi(provider, apiKey, baseUrl, model, text, voice) {
         outputAudio.load();
     } catch (err) {
         // lastApiResponse might be set from the !response.ok block
-        displayError(err.message);
+        displayError(err.message); // displayError will hide loader
         statsArea.style.display = 'none'; // Hide stats on error
+    } finally {
+        hideLoader(); // Ensure loader is hidden
     }
 }
 
-
-
-// --- API Call Logic for Speech-to-Text ---
+// Handles Speech-to-Text (STT) API calls.
 async function callSttApi(provider, apiKey, baseUrl, model, file) {
+    showLoader(); // Show loader at the start
     clearOutput();
     outputText.innerHTML = 'Transcribing audio...';
     outputArea.style.display = 'block';
@@ -1239,26 +1268,7 @@ async function callSttApi(provider, apiKey, baseUrl, model, file) {
         const endTime = performance.now();
         const durationInSeconds = ((endTime - startTime) / 1000).toFixed(2);
         
-        const responseClone = response.clone();
-        let data;
-        try {
-            data = await response.json();
-            lastApiResponse = JSON.stringify(data, null, 2);
-        } catch (jsonError) {
-             console.error("Failed to parse JSON response:", jsonError);
-            const textResponse = await responseClone.text();
-            lastApiResponse = `Response was not valid JSON:\n${textResponse}`;
-            data = null;
-        }
-
-        if (!response.ok) {
-            const errText = data?.text || data?.transcript || lastApiResponse || `HTTP Error ${response.status}`;
-            throw new Error(errText);
-        }
-
-        if (!data) {
-            throw new Error("Received OK response but failed to parse JSON content.");
-        }
+        const data = await handleApiResponse(response);
 
         const transcript = data.text || data.transcript || JSON.stringify(data);
         outputText.innerHTML = `<strong>Transcribed by ${model}:</strong><br>${transcript.replace(/\\n/g, '<br>')}`;
@@ -1305,12 +1315,14 @@ async function callSttApi(provider, apiKey, baseUrl, model, file) {
         
     } catch (err) {
         // lastApiResponse might contain error details
-        displayError(err.message);
+        displayError(err.message); // displayError will hide loader
         statsArea.style.display = 'none'; // Hide stats on error
+    } finally {
+        hideLoader(); // Ensure loader is hidden
     }
 }
 
-// --- Universal Video URL Extraction Function ---
+// Universal function to extract video URL from various API response structures.
 function extractVideoUrl(responseData) {
     console.log('Extracting video URL from response:', responseData);
     
@@ -1442,7 +1454,7 @@ function extractVideoUrl(responseData) {
     return bestUrl.url;
 }
 
-// --- Video Download Setup Function ---
+// Sets up the video download button with appropriate event listeners.
 function setupVideoDownload(videoUrl, model) {
     const fileName = `video-${model}-${Date.now()}.mp4`;
     
@@ -1529,8 +1541,9 @@ function setupVideoDownload(videoUrl, model) {
     });
 }
 
-// --- API Call Logic for Video Generation ---
+// Handles video generation API calls.
 async function callVideoApi(provider, apiKey, baseUrl, model, prompt) {
+    showLoader(); // Show loader at the start
     clearOutput();
     outputText.innerHTML = 'Generating video...';
     outputArea.style.display = 'block';
@@ -1595,6 +1608,16 @@ async function callVideoApi(provider, apiKey, baseUrl, model, prompt) {
     const startTime = performance.now();
     
     try {
+        if (provider === 'openai' || provider === 'deepseek' || provider === 'claude') {
+            // For providers that we know don't support video, display error and hide loader immediately.
+            // The specific error messages are handled inside the switch for these cases.
+            // This ensures the loader doesn't stay visible indefinitely.
+            hideLoader();
+            // The displayError call within the switch will handle the message.
+            // No need to call it here again.
+            return;
+        }
+
         const response = await fetch(apiUrl, {
             method: 'POST',
             headers: headers,
@@ -1604,28 +1627,8 @@ async function callVideoApi(provider, apiKey, baseUrl, model, prompt) {
         const endTime = performance.now();
         const durationInSeconds = ((endTime - startTime) / 1000).toFixed(2);
 
-        const responseClone = response.clone();
-        let data;
-        try {
-            data = await response.json();
-            lastApiResponse = JSON.stringify(data, null, 2);
-        } catch (jsonError) {
-            console.error("Failed to parse JSON response:", jsonError);
-            const textResponse = await responseClone.text();
-            lastApiResponse = `Response was not valid JSON:\n${textResponse}`;
-            data = null;
-        }
-
+        const data = await handleApiResponse(response);
         console.log("Video API Response Data:", data);
-
-        if (!response.ok) {
-            const errorMsg = data?.error?.message || lastApiResponse || `HTTP Error ${response.status}`;
-            throw new Error(errorMsg);
-        }
-
-        if (!data) {
-            throw new Error("Received OK response but failed to parse JSON content.");
-        }
 
         // Extract video URL and show stats - improved to handle multiple response formats
         let videoUrl = extractVideoUrl(data);
@@ -1670,12 +1673,20 @@ async function callVideoApi(provider, apiKey, baseUrl, model, prompt) {
         }
 
     } catch (error) {
-        displayError(error.message);
+        displayError(error.message); // displayError will hide loader
         statsArea.style.display = 'none';
+    } finally {
+        // Ensure loader is hidden for all other cases, including successful calls or other errors
+        if (!(provider === 'openai' || provider === 'deepseek' || provider === 'claude')) {
+            hideLoader();
+        }
     }
 }
 
-// --- Main Event Listener ---
+// --- EVENT LISTENERS ---
+// Event listener registrations for various UI elements.
+
+// Main send button click listener
 sendButton.addEventListener('click', async () => {
     // Save current provider's credentials and general settings before sending
     await saveProviderCredentials(providerSelect.value);
@@ -1728,7 +1739,7 @@ sendButton.addEventListener('click', async () => {
     }
 });
 
-// --- Payload Toggle Listener ---
+// Listener for toggling the display of the request payload.
 togglePayloadBtn.addEventListener('click', () => {
     const isHidden = payloadDisplayArea.style.display === 'none';
     if (isHidden) {
@@ -1751,7 +1762,7 @@ togglePayloadBtn.addEventListener('click', () => {
     }
 });
 
-// --- Response Toggle Listener ---
+// Listener for toggling the display of the API response.
 toggleResponseBtn.addEventListener('click', () => {
     const isHidden = responseDisplayArea.style.display === 'none';
     if (isHidden) {
@@ -1774,7 +1785,90 @@ toggleResponseBtn.addEventListener('click', () => {
     }
 });
 
-// Initial checks
+// Add an event listener to the provider select dropdown
+providerSelect.addEventListener('change', async () => {
+    // Save credentials for the PREVIOUS provider
+    // To get the previous provider, we need to be careful as the value has already changed.
+    // This is a bit tricky. A better way would be to store the previous value before it changes.
+    // For now, we'll rely on loading to implicitly handle this,
+    // but saving on 'input' for API key/base URL is more robust.
+    // Let's call saveGeneralSettings which saves the new provider.
+    await saveGeneralSettings();
+    await loadProviderCredentials(providerSelect.value);
+    toggleBaseUrlInput(); // Original line, good to keep
+});
+
+// Add event listeners to radio buttons to toggle image options
+document.querySelectorAll('input[name="generation-type"]').forEach(radio => {
+    radio.addEventListener('change', toggleGenerationOptions);
+});
+audioTypeSelect.addEventListener('change', toggleGenerationOptions);
+
+// Single button recorder toggle
+recordBtn.addEventListener('click', async () => {
+    if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+        // Start recording
+        recordedChunks = [];
+        try {
+            // Request microphone access
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+            // Update permission status since it was successful
+            microphonePermissionStatus = 'granted';
+            updateMicrophoneUI();
+
+            mediaRecorder = new MediaRecorder(stream);
+            mediaRecorder.ondataavailable = e => {
+                if (e.data.size > 0) recordedChunks.push(e.data);
+            };
+            mediaRecorder.onstop = () => {
+                const blob = new Blob(recordedChunks, { type: 'audio/webm' });
+                const url = URL.createObjectURL(blob);
+                recordingPreview.src = url;
+                recordingPreview.style.display = 'block';
+                // Update record button label
+                recordBtn.textContent = 'Start Recording';
+
+                // Stop all tracks to release the microphone
+                stream.getTracks().forEach(track => track.stop());
+            };
+            mediaRecorder.start();
+            recordBtn.textContent = 'Stop Recording';
+            recordingPreview.style.display = 'none';
+        } catch (err) {
+            microphonePermissionStatus = 'denied';
+            updateMicrophoneUI();
+            displayError('Microphone access denied or unavailable.');
+        }
+    } else {
+        // Stop recording
+        mediaRecorder.stop();
+    }
+});
+
+enableQualityCheckbox.addEventListener('change', () => {
+    if (qualityOptionsContainer) {
+        qualityOptionsContainer.style.display = enableQualityCheckbox.checked ? 'block' : 'none';
+    }
+    if (customQualityInput) {
+        customQualityInput.style.display = 'none';
+    }
+});
+
+// Show/hide custom quality input when 'custom' option is selected
+qualitySelect.addEventListener('change', () => {
+    if (enableQualityCheckbox.checked && qualitySelect.value === 'custom' && customQualityInput) {
+        customQualityInput.style.display = 'block';
+    } else if (customQualityInput) {
+        customQualityInput.style.display = 'none';
+    }
+});
+
+
+// --- INITIALIZATION ---
+// Code that runs when the DOM is fully loaded.
+
+// Initial checks before DOMContentLoaded
 toggleBaseUrlInput();
 toggleGenerationOptions(); // Initialize generation options visibility on load
 

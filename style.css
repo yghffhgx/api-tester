@@ -68,7 +68,7 @@ body {
 h1 {
     text-align: center;
     color: var(--text-color);
-    margin-bottom: 30px; /* More space below h1 */
+    margin-bottom: 35px; /* More space below h1 - Adjusted */
 }
 
 label {
@@ -144,7 +144,7 @@ button {
     cursor: pointer;
     box-shadow: 0 4px 12px var(--shadow-color);
     transition: transform 0.2s ease, box-shadow 0.2s ease, background-image 0.2s ease;
-    margin-top: 10px; /* Added some margin-top */
+    margin-top: 20px; /* Adjusted for more space before the main button */
 }
 
 button:hover {
@@ -181,11 +181,11 @@ hr {
     background-color: var(--output-bg-color); /* Use a subtle background for sections */
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    margin-bottom: 20px;
+    margin-bottom: 25px; /* Adjusted for consistent section spacing */
 }
 
 #output-area {
-    margin-top: 20px;
+    margin-top: 25px; /* Adjusted for consistent section spacing */
     padding: 20px; /* Increased padding */
     border: 1px dashed var(--output-border-color);
     background-color: var(--output-bg-color);
@@ -251,7 +251,7 @@ hr {
 
 #stats-area span {
     display: block; /* Each stat on a new line for clarity */
-    margin-bottom: 5px;
+    margin-bottom: 6px; /* Slightly increased spacing for stat lines */
     color: var(--text-color); /* Ensure text is visible */
 }
 #stats-area span:last-child {
@@ -260,7 +260,7 @@ hr {
 
 
 .generation-type-selector {
-    margin-bottom: 20px;
+    margin-bottom: 25px; /* Adjusted for consistent section spacing */
     padding: 15px;
     background-color: var(--output-bg-color); /* Consistent section background */
     border: 1px solid var(--border-color);
@@ -595,6 +595,10 @@ body.dark-mode .model-response {
     margin-bottom: 10px;
 }
 
+#payload-container { /* Added to adjust spacing for the whole container */
+    margin-top: 25px; /* Consistent section spacing */
+}
+
 /* Styling for individual payload toggle buttons */
 .payload-toggle-btn {
     flex: 1; /* Make buttons share space equally */
@@ -654,6 +658,41 @@ body.dark-mode .model-response {
     border: 1px solid var(--link-color);
     border-radius: 4px;
     transition: background-color 0.2s, color 0.2s;
+}
+
+/* Loading Indicator Styles */
+#loading-indicator {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent overlay */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999; /* Ensure it's on top */
+    color: white;
+}
+
+.spinner {
+    border: 8px solid #f3f3f3; /* Light grey */
+    border-top: 8px solid var(--button-bg-gradient-end); /* Use theme color */
+    border-radius: 50%;
+    width: 60px;
+    height: 60px;
+    animation: spin 1s linear infinite;
+    margin-bottom: 20px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+#loading-indicator p {
+    font-size: 1.2em;
 }
 
 #output-area a#download-audio:hover,
