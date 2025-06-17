@@ -410,6 +410,7 @@ function toggleBaseUrlInput() {
 
 // Function to show/hide image-specific options
 function toggleGenerationOptions() {
+    const promptLabel = document.getElementById('prompt-label'); // Cache prompt label element
     // Hide voice input by default on every switch
     voiceOptionsContainer.style.display = 'none';
     const generationType = document.querySelector('input[name="generation-type"]:checked').value;
@@ -440,14 +441,14 @@ function toggleGenerationOptions() {
             sttInputContainer.style.display = 'none';
             recorderControls.style.display = 'none';
             voiceOptionsContainer.style.display = 'block';
-            document.getElementById('prompt-label').textContent = 'Text to Speak:';
+            if (promptLabel) promptLabel.textContent = 'Text to Speak:';
         } else {
             // For STT: show file input & recorder, hide text prompt & voice input
             sttInputContainer.style.display = 'block';
             recorderControls.style.display = 'block';
             promptInput.style.display = 'none';
             voiceOptionsContainer.style.display = 'none';
-            document.getElementById('prompt-label').textContent = 'Upload or Record Audio:';
+            if (promptLabel) promptLabel.textContent = 'Upload or Record Audio:';
         }
     }
 
@@ -457,38 +458,61 @@ function toggleGenerationOptions() {
     
     if (showVideo) {
         promptInput.style.display = 'block';
-        document.getElementById('prompt-label').textContent = 'Video Description:';
+        if (promptLabel) promptLabel.textContent = 'Video Description:';
     }
 
 
     // Text Options
     if (showText) {
         promptInput.style.display = 'block';
-        document.getElementById('prompt-label').textContent = 'Prompt:';
+        if (promptLabel) promptLabel.textContent = 'Prompt:';
     }
 
     // Reset prompt label for image when selected
     if (generationType === 'image') {
         promptInput.style.display = 'block';
-        document.getElementById('prompt-label').textContent = 'Prompt / Image Description:';
+        if (promptLabel) promptLabel.textContent = 'Prompt / Image Description:';
     }
   // Reposition Model Name field based on generation type
   if (showImage) {
+    if (imageOptionsContainer && modelContainer && enableQualityContainer) {
       imageOptionsContainer.insertBefore(modelContainer, enableQualityContainer);
+    } else {
+      console.error('DOM structure error: Cannot place model container for image options. Elements missing.');
+    }
   } else if (showAudio) {
-      // Different placement based on Audio Type (TTS vs STT)
-      if (audioTypeSelect.value === 'tts') {
-          // TTS: model before voice input
-          voiceOptionsContainer.parentNode.insertBefore(modelContainer, voiceOptionsContainer);
+    const audioType = audioTypeSelect.value;
+    if (audioType === 'tts') {
+      // TTS: model before voice input
+      if (voiceOptionsContainer && voiceOptionsContainer.parentNode && modelContainer) {
+        voiceOptionsContainer.parentNode.insertBefore(modelContainer, voiceOptionsContainer);
       } else {
-          // STT: model before audio file/recorder inputs
-          audioOptionsContainer.insertBefore(modelContainer, sttInputContainer);
+        console.error('DOM structure error: Cannot place model container for TTS audio options. Elements missing.');
       }
+    } else {
+      // STT: model before audio file/recorder inputs
+      if (audioOptionsContainer && modelContainer && sttInputContainer) {
+        audioOptionsContainer.insertBefore(modelContainer, sttInputContainer);
+      } else {
+        console.error('DOM structure error: Cannot place model container for STT audio options. Elements missing.');
+      }
+    }
   } else if (showVideo) {
-      // Video: model at the beginning of video options
+    // Video: model at the beginning of video options
+    if (videoOptionsContainer && modelContainer && videoOptionsContainer.firstElementChild) {
       videoOptionsContainer.insertBefore(modelContainer, videoOptionsContainer.firstElementChild);
-  } else {
+    } else if (videoOptionsContainer && modelContainer) { // If no children, append
+      videoOptionsContainer.appendChild(modelContainer);
+    } else {
+      console.error('DOM structure error: Cannot place model container for video options. Elements missing.');
+    }
+  } else { // Default position (e.g., for Text generation)
+    if (modelContainerOriginalParent && modelContainer) {
+      // modelContainerOriginalNextSibling can be null if it was the last element
       modelContainerOriginalParent.insertBefore(modelContainer, modelContainerOriginalNextSibling);
+    } else {
+      console.error('DOM structure error: Cannot return model container to its original position. Original parent missing.');
+    }
   }
 }
 
@@ -770,6 +794,19 @@ async function callTextApi(provider, apiKey, baseUrl, model, prompt) {
         const durationInSeconds = (endTime - startTime) / 1000;
 
         if (body.stream && (provider === 'openai' || provider === 'openai_compatible')) {
+            if (!response.ok) {
+                // Attempt to parse error from stream-initialization HTTP error
+                let errorData;
+                try {
+                    errorData = await response.json();
+                    lastApiResponse = JSON.stringify(errorData, null, 2);
+                } catch (e) {
+                    const errorText = await response.text();
+                    lastApiResponse = `Stream connection error: ${response.status}\n${errorText}`;
+                    errorData = { error: { message: `Stream connection error: ${response.status}. ${errorText}` } };
+                }
+                throw new Error(errorData.error?.message || `Stream connection error: ${response.status}`);
+            }
             // Handle streaming response
             const reader = response.body.getReader();
             const decoder = new TextDecoder("utf-8");
@@ -824,20 +861,21 @@ async function callTextApi(provider, apiKey, baseUrl, model, prompt) {
                                 }
                                 // Store the raw choices if needed for other processing (e.g. finish_reason)
                                 if (parsed.choices && parsed.choices[0] && parsed.choices[0].finish_reason){
-                                    console.log("Stream finished with reason: ", parsed.choices[0].finish_reason);
-                                    // Could update stats here if reason is 'stop' or similar
+                                    // console.log("Stream finished with reason: ", parsed.choices[0].finish_reason); // Verbose
                                 }
                             } catch (e) {
                                 console.warn("Error parsing streamed JSON chunk:", e, "Chunk:", jsonStr);
                             }
-                        } else if (line.trim().length > 0 && !line.includes("data: ")) { // Log non-data lines if they are not empty
-                            console.log("Received non-data line in stream:", line);
+                        } else if (line.trim().length > 0 && !line.includes("data: ") && !line.includes("event: message_stop")) { // Log non-data lines if they are not empty and not a stop event for some APIs
+                            // console.log("Received non-data line in stream:", line); // Can be verbose
                         }
                     }
                 }
             }
             await processStream();
-            lastApiResponse = contentBuffer; // Store accumulated content as the "response" for display if needed
+            // For streamed responses, lastApiResponse will show a summary,
+            // as the full JSON is processed chunk by chunk and not stored as a single object.
+            lastApiResponse = `{\n  "info": "Response was streamed.",\n  "model": "${model}",\n  "duration_seconds": ${durationInSeconds.toFixed(2)},\n  "accumulated_content_length": ${contentBuffer.length}\n}`;
 
         } else {
             // Existing non-streaming logic
@@ -936,7 +974,18 @@ async function callImageApi(provider, apiKey, baseUrl, model, prompt) {
     };
     // Include quality parameter only if enabled
     if (provider === 'openai_compatible' && enableQualityCheckbox.checked && qualitySelect) {
-        body.quality = qualitySelect.value;
+        if (qualitySelect.value === 'custom' && customQualityInput) {
+            if (customQualityInput.value.trim() === '') {
+                // Potentially display an error or use a default if custom quality is selected but empty
+                console.warn("Custom quality selected but input is empty. API might reject or use default.");
+                // Not setting body.quality here, or explicitly setting to a default if API requires it
+            } else {
+                body.quality = customQualityInput.value.trim();
+            }
+        } else if (qualitySelect.value !== 'custom') {
+            body.quality = qualitySelect.value;
+        }
+        // If qualitySelect.value is 'custom' but customQualityInput is missing, body.quality remains unset.
     }
 
     // Store payload before sending
@@ -1198,7 +1247,7 @@ async function callTtsApi(provider, apiKey, baseUrl, model, text, voice) {
             
             outputAudio.style.display = 'block';
             downloadAudio.href = url;
-            downloadAudio.download = `${model}-${voice}-tts.wav`;
+            downloadAudio.download = `${model}-${voice}-tts.mp3`; // Changed to mp3 as it's common for OpenAI TTS
             downloadAudio.style.display = 'inline';
             outputText.innerHTML = `<strong>Voice:</strong> ${voice}`;
             outputText.style.display = 'block';
@@ -1608,15 +1657,9 @@ async function callVideoApi(provider, apiKey, baseUrl, model, prompt) {
     const startTime = performance.now();
     
     try {
-        if (provider === 'openai' || provider === 'deepseek' || provider === 'claude') {
-            // For providers that we know don't support video, display error and hide loader immediately.
-            // The specific error messages are handled inside the switch for these cases.
-            // This ensures the loader doesn't stay visible indefinitely.
-            hideLoader();
-            // The displayError call within the switch will handle the message.
-            // No need to call it here again.
-            return;
-        }
+        // For providers that we know don't support video, displayError is called in the switch,
+        // and displayError itself handles hideLoader. So no explicit hideLoader here is needed for these cases.
+        // The 'return' in the switch for these providers will prevent further execution.
 
         const response = await fetch(apiUrl, {
             method: 'POST',
@@ -1787,15 +1830,15 @@ toggleResponseBtn.addEventListener('click', () => {
 
 // Add an event listener to the provider select dropdown
 providerSelect.addEventListener('change', async () => {
-    // Save credentials for the PREVIOUS provider
-    // To get the previous provider, we need to be careful as the value has already changed.
-    // This is a bit tricky. A better way would be to store the previous value before it changes.
-    // For now, we'll rely on loading to implicitly handle this,
-    // but saving on 'input' for API key/base URL is more robust.
-    // Let's call saveGeneralSettings which saves the new provider.
+    // When the provider changes:
+    // 1. General settings (which include the newly selected provider) are saved.
+    // 2. Credentials for the newly selected provider are loaded from storage.
+    // 3. The visibility of the Base URL input is updated based on the new provider.
+    // Note: Actual saving of API key/Base URL text input values for a provider
+    // happens via their respective 'input' event listeners, which save against the currently selected provider.
     await saveGeneralSettings();
     await loadProviderCredentials(providerSelect.value);
-    toggleBaseUrlInput(); // Original line, good to keep
+    toggleBaseUrlInput();
 });
 
 // Add event listeners to radio buttons to toggle image options

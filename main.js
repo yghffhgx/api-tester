@@ -33,29 +33,25 @@ async function initializeStore() {
     }
 
     // IPC handlers for electron-store (and theme)
-    console.log('[Main Process] Attempting to register get-store-value IPC handler.');
     ipcMain.handle('get-store-value', (event, key) => {
       const value = storeInstance.get(key);
       // console.log(`[Main Process] IPC Handler: get-store-value for key: ${key}, returning:`, value);
       return value;
     });
-    console.log('[Main Process] Successfully registered get-store-value IPC handler.');
+    console.log('[Main Process] Registered get-store-value IPC handler.');
 
-    console.log('[Main Process] Attempting to register set-store-value IPC handler.');
     ipcMain.handle('set-store-value', (event, key, value) => {
       storeInstance.set(key, value);
       // console.log(`[Main Process] IPC Handler: set-store-value for key: ${key}, value:`, value);
     });
-    console.log('[Main Process] Successfully registered set-store-value IPC handler.');
+    console.log('[Main Process] Registered set-store-value IPC handler.');
 
-    console.log('[Main Process] Attempting to register delete-store-value IPC handler.');
     ipcMain.handle('delete-store-value', (event, key) => {
       storeInstance.delete(key);
       // console.log(`[Main Process] IPC Handler: delete-store-value for key: ${key}`);
     });
-    console.log('[Main Process] Successfully registered delete-store-value IPC handler.');
+    console.log('[Main Process] Registered delete-store-value IPC handler.');
 
-    console.log('[Main Process] Attempting to register get-theme-preference IPC handler.');
     ipcMain.handle('get-theme-preference', () => {
       const theme = storeInstance.get('userTheme', 'system');
       let shouldUseDark = nativeTheme.shouldUseDarkColors;
@@ -64,9 +60,8 @@ async function initializeStore() {
       console.log('[Main Process] IPC Handler: get-theme-preference. Returning:', { theme, shouldUseDark }); // Corrected log
       return { theme, shouldUseDark };
     });
-    console.log('[Main Process] Successfully registered get-theme-preference IPC handler.');
+    console.log('[Main Process] Registered get-theme-preference IPC handler.');
 
-    console.log('[Main Process] Attempting to register set-theme-preference IPC handler.');
     ipcMain.handle('set-theme-preference', (event, theme) => {
       storeInstance.set('userTheme', theme);
       console.log(`[Main Process] IPC Handler: set-theme-preference. User theme set to: ${theme}`);
@@ -88,9 +83,9 @@ async function initializeStore() {
       });
       return { theme, shouldUseDark: newShouldUseDark };
     });
-    console.log('[Main Process] Successfully registered set-theme-preference IPC handler.');
+    console.log('[Main Process] Registered set-theme-preference IPC handler.');
 
-    console.log('[Main Process] IPC handlers set up');
+    console.log('[Main Process] All core IPC handlers set up.');
   } catch (error) {
     console.error('[Main Process] Error in initializeStore():', error);
   }
@@ -241,16 +236,22 @@ function createWindow() {
 
   // Send initial theme information to the new window
   // This ensures new windows also get the correct theme immediately
-  const currentThemeSetting = storeInstance.get('userTheme', 'system');
-  let shouldUseDark = nativeTheme.shouldUseDarkColors;
-  if (currentThemeSetting === 'light') shouldUseDark = false;
-  if (currentThemeSetting === 'dark') shouldUseDark = true;
-  
   newWindow.webContents.on('did-finish-load', () => {
+    // Re-evaluate the correct theme state at the moment the window is ready
+    const themeToSend = storeInstance.get('userTheme', 'system');
+    let shouldUseDarkToSend = nativeTheme.shouldUseDarkColors; // Get current OS state
+    if (themeToSend === 'light') {
+      shouldUseDarkToSend = false;
+    } else if (themeToSend === 'dark') {
+      shouldUseDarkToSend = true;
+    }
+    // If themeToSend is 'system', shouldUseDarkToSend already holds the correct OS state.
+
     newWindow.webContents.send('theme-updated', {
-      theme: currentThemeSetting,
-      shouldUseDark: shouldUseDark
+      theme: themeToSend,
+      shouldUseDark: shouldUseDarkToSend
     });
+    console.log('[Main Process] Sent initial theme-updated to new window:', { theme: themeToSend, shouldUseDark: shouldUseDarkToSend });
   });
 
   return newWindow; // Return the new window instance
