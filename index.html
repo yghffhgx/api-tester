@@ -152,7 +152,17 @@
     <label for="prompt-input" id="prompt-label">Prompt / Image Description:</label> <!-- Label will be updated by JS -->
     <textarea id="prompt-input" rows="4" placeholder="Enter text prompt or image description..."></textarea>
 
-    <button id="send-button">Generate</button> <!-- Changed button text -->
+    <div class="enable-streaming-container" style="margin-bottom: 15px; padding: 10px; background-color: var(--output-bg-color); border: 1px solid var(--border-color); border-radius: 8px;">
+        <label class="enable-streaming-title" for="enable-streaming-checkbox" style="display: flex; align-items: center; font-weight: 600; color: var(--text-color-muted); cursor: pointer;">
+            <span>Enable Streaming for Text</span>
+            <span class="switch" style="margin-left: 12px;">
+                <input type="checkbox" id="enable-streaming-checkbox" checked>
+                <span class="slider"></span>
+            </span>
+        </label>
+    </div>
+
+    <button id="send-button">Generate</button>
 
     <div id="output-area" style="margin-top: 20px; padding: 15px; border: 1px dashed #ccc; background-color: #eee; border-radius: 4px; display: none; white-space: pre-wrap; /* Preserve whitespace and wrap */">
         <!-- AI response / Image / Status will be displayed here -->

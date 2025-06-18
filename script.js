@@ -20,6 +20,7 @@ const customQualityInput = document.getElementById('custom-quality-input'); // N
 const imageWidthInput = document.getElementById('image-width-input');
 const imageHeightInput = document.getElementById('image-height-input');
 const statsArea = document.getElementById('stats-area');
+const enableStreamingCheckbox = document.getElementById('enable-streaming-checkbox'); // Added for streaming toggle
 
 // Audio generation elements
 const generationTypeAudio = document.getElementById('generation-type-audio');
@@ -140,6 +141,7 @@ const LAST_VOICE_KEY = 'lastVoice';
 const LAST_VIDEO_DURATION_KEY = 'lastVideoDuration';
 const LAST_VIDEO_ASPECT_RATIO_ENABLED_KEY = 'lastVideoAspectRatioEnabled';
 const LAST_VIDEO_ASPECT_RATIO_KEY = 'lastVideoAspectRatio';
+const LAST_STREAMING_ENABLED_KEY = 'lastStreamingEnabled'; // Added for streaming toggle
 
 // Loads API credentials for the given provider from storage.
 async function loadProviderCredentials(provider) {
@@ -220,6 +222,12 @@ async function loadGeneralSettings() {
         videoAspectRatioSelect.value = lastVideoAspectRatio || '16:9';
     }
 
+    const lastStreamingEnabled = await getStoredValue(LAST_STREAMING_ENABLED_KEY);
+    if (enableStreamingCheckbox) {
+        // Default to true if not found in storage (current behavior is streaming on)
+        enableStreamingCheckbox.checked = typeof lastStreamingEnabled === 'boolean' ? lastStreamingEnabled : true;
+    }
+
     toggleGenerationOptions(); // Update UI based on loaded settings
     toggleBaseUrlInput(); // Ensure base URL visibility
 }
@@ -239,6 +247,8 @@ async function saveGeneralSettings() {
     if (imageHeightInput) await setStoredValue(LAST_IMAGE_HEIGHT_KEY, imageHeightInput.value);
     if (audioTypeSelect) await setStoredValue(LAST_AUDIO_TYPE_KEY, audioTypeSelect.value);
     if (voiceInput) await setStoredValue(LAST_VOICE_KEY, voiceInput.value);
+    if (enableStreamingCheckbox) await setStoredValue(LAST_STREAMING_ENABLED_KEY, enableStreamingCheckbox.checked); // Added for streaming toggle
+
 
     // Save video settings
     if (videoDurationInput) await setStoredValue(LAST_VIDEO_DURATION_KEY, videoDurationInput.value);
@@ -410,110 +420,262 @@ function toggleBaseUrlInput() {
 
 // Function to show/hide image-specific options
 function toggleGenerationOptions() {
-    const promptLabel = document.getElementById('prompt-label'); // Cache prompt label element
+    const generationTypeRadio = document.querySelector('input[name="generation-type"]:checked');
+    if (!generationTypeRadio) {
+        console.error('[Debug ToggleGenOpts] No generation type radio button is checked. Aborting.');
+        return;
+    }
+    const generationType = generationTypeRadio.value;
+
+    console.log('[Debug ToggleGenOpts] Entering. Type: ' + generationType);
+
+    const promptLabel = document.getElementById('prompt-label');
+
+    // Log initial display states for key containers
+    console.log('[Debug ToggleGenOpts] imageOptionsContainer display BEFORE: ' + (imageOptionsContainer ? imageOptionsContainer.style.display : 'N/A'));
+    console.log('[Debug ToggleGenOpts] audioOptionsContainer display BEFORE: ' + (audioOptionsContainer ? audioOptionsContainer.style.display : 'N/A'));
+    console.log('[Debug ToggleGenOpts] videoOptionsContainer display BEFORE: ' + (videoOptionsContainer ? videoOptionsContainer.style.display : 'N/A'));
+    console.log('[Debug ToggleGenOpts] modelContainer display BEFORE: ' + (modelContainer ? modelContainer.style.display : 'N/A') +
+                ', parent: ' + (modelContainer && modelContainer.parentNode ? modelContainer.parentNode.id || modelContainer.parentNode.tagName : 'N/A') +
+                ', nextSibling: ' + (modelContainer && modelContainer.nextElementSibling ? modelContainer.nextElementSibling.id || modelContainer.nextElementSibling.tagName : 'N/A'));
+    console.log('[Debug ToggleGenOpts] promptInput display BEFORE: ' + (promptInput ? promptInput.style.display : 'N/A'));
+    console.log('[Debug ToggleGenOpts] voiceOptionsContainer display BEFORE: ' + (voiceOptionsContainer ? voiceOptionsContainer.style.display : 'N/A'));
+
+
     // Hide voice input by default on every switch
-    voiceOptionsContainer.style.display = 'none';
-    const generationType = document.querySelector('input[name="generation-type"]:checked').value;
-    const showText = generationType === 'text'; // Determine text mode early for reposition logic
+    if (voiceOptionsContainer) {
+        console.log('[Debug ToggleGenOpts] Setting voiceOptionsContainer display to: none (default reset)');
+        voiceOptionsContainer.style.display = 'none';
+        console.log('[Debug ToggleGenOpts] voiceOptionsContainer display AFTER: ' + voiceOptionsContainer.style.display);
+    }
+
+    const showText = generationType === 'text';
+    const showImage = generationType === 'image';
+    const showAudio = generationType === 'audio';
+    const showVideo = generationType === 'video';
 
     // Image Options
-    const showImage = generationType === 'image';
-    imageOptionsContainer.style.display = showImage ? 'block' : 'none';
+    console.log('[Debug ToggleGenOpts] Processing Image Options visibility. showImage: ' + showImage);
+    if (imageOptionsContainer) {
+        const newDisplay = showImage ? 'block' : 'none';
+        console.log('[Debug ToggleGenOpts] Setting imageOptionsContainer display to: ' + newDisplay);
+        imageOptionsContainer.style.display = newDisplay;
+        console.log('[Debug ToggleGenOpts] imageOptionsContainer display AFTER: ' + imageOptionsContainer.style.display);
+    }
     if (enableQualityContainer) {
-        enableQualityContainer.style.display = showImage ? 'block' : 'none';
+        const newDisplay = showImage ? 'block' : 'none';
+        console.log('[Debug ToggleGenOpts] Setting enableQualityContainer display to: ' + newDisplay);
+        enableQualityContainer.style.display = newDisplay;
+        console.log('[Debug ToggleGenOpts] enableQualityContainer display AFTER: ' + enableQualityContainer.style.display);
     }
     if (qualityOptionsContainer) {
-        qualityOptionsContainer.style.display = (showImage && enableQualityCheckbox.checked) ? 'block' : 'none';
+        const newDisplay = (showImage && enableQualityCheckbox && enableQualityCheckbox.checked) ? 'block' : 'none';
+        console.log('[Debug ToggleGenOpts] Setting qualityOptionsContainer display to: ' + newDisplay);
+        qualityOptionsContainer.style.display = newDisplay;
+        console.log('[Debug ToggleGenOpts] qualityOptionsContainer display AFTER: ' + qualityOptionsContainer.style.display);
     }
     if (customQualityInput) {
-        customQualityInput.style.display = (showImage && enableQualityCheckbox.checked && qualitySelect.value === 'custom') ? 'block' : 'none';
+        const newDisplay = (showImage && enableQualityCheckbox && enableQualityCheckbox.checked && qualitySelect && qualitySelect.value === 'custom') ? 'block' : 'none';
+        console.log('[Debug ToggleGenOpts] Setting customQualityInput display to: ' + newDisplay);
+        customQualityInput.style.display = newDisplay;
+        console.log('[Debug ToggleGenOpts] customQualityInput display AFTER: ' + customQualityInput.style.display);
     }
 
     // Audio Options
-    const showAudio = generationType === 'audio';
-    audioOptionsContainer.style.display = showAudio ? 'block' : 'none';
+    console.log('[Debug ToggleGenOpts] Processing Audio Options visibility. showAudio: ' + showAudio);
+    if (audioOptionsContainer) {
+        const newDisplay = showAudio ? 'block' : 'none';
+        console.log('[Debug ToggleGenOpts] Setting audioOptionsContainer display to: ' + newDisplay);
+        audioOptionsContainer.style.display = newDisplay;
+        console.log('[Debug ToggleGenOpts] audioOptionsContainer display AFTER: ' + audioOptionsContainer.style.display);
+    }
 
     if (showAudio) {
-        const audioType = audioTypeSelect.value;
+        console.log('[Debug ToggleGenOpts] Entering showAudio block.');
+        const audioType = audioTypeSelect ? audioTypeSelect.value : 'null (audioTypeSelect not found)';
+        console.log('[Debug ToggleGenOpts] Audio type: ' + audioType);
         if (audioType === 'tts') {
-            // For TTS: show text prompt, hide file input & recorder, show voice input
-            promptInput.style.display = 'block';
-            sttInputContainer.style.display = 'none';
-            recorderControls.style.display = 'none';
-            voiceOptionsContainer.style.display = 'block';
-            if (promptLabel) promptLabel.textContent = 'Text to Speak:';
-        } else {
-            // For STT: show file input & recorder, hide text prompt & voice input
-            sttInputContainer.style.display = 'block';
-            recorderControls.style.display = 'block';
-            promptInput.style.display = 'none';
-            voiceOptionsContainer.style.display = 'none';
-            if (promptLabel) promptLabel.textContent = 'Upload or Record Audio:';
+            console.log('[Debug ToggleGenOpts] Audio type is TTS.');
+            if (promptInput) {
+                console.log('[Debug ToggleGenOpts] Setting promptInput display to: block');
+                promptInput.style.display = 'block';
+                console.log('[Debug ToggleGenOpts] promptInput display AFTER: ' + promptInput.style.display);
+            }
+            if (sttInputContainer) {
+                console.log('[Debug ToggleGenOpts] Setting sttInputContainer display to: none');
+                sttInputContainer.style.display = 'none';
+                console.log('[Debug ToggleGenOpts] sttInputContainer display AFTER: ' + sttInputContainer.style.display);
+            }
+            if (recorderControls) {
+                console.log('[Debug ToggleGenOpts] Setting recorderControls display to: none');
+                recorderControls.style.display = 'none';
+                console.log('[Debug ToggleGenOpts] recorderControls display AFTER: ' + recorderControls.style.display);
+            }
+            if (voiceOptionsContainer) {
+                console.log('[Debug ToggleGenOpts] Setting voiceOptionsContainer display to: block');
+                voiceOptionsContainer.style.display = 'block';
+                console.log('[Debug ToggleGenOpts] voiceOptionsContainer display AFTER: ' + voiceOptionsContainer.style.display);
+            }
+            if (promptLabel) {
+                promptLabel.textContent = 'Text to Speak:';
+                console.log('[Debug ToggleGenOpts] Prompt label set to: Text to Speak: (New value: ' + promptLabel.textContent + ')');
+            }
+        } else { // STT or other/default if audioTypeSelect not found
+            console.log('[Debug ToggleGenOpts] Audio type is STT (or default).');
+            if (sttInputContainer) {
+                console.log('[Debug ToggleGenOpts] Setting sttInputContainer display to: block');
+                sttInputContainer.style.display = 'block';
+                console.log('[Debug ToggleGenOpts] sttInputContainer display AFTER: ' + sttInputContainer.style.display);
+            }
+            if (recorderControls) {
+                console.log('[Debug ToggleGenOpts] Setting recorderControls display to: block');
+                recorderControls.style.display = 'block';
+                console.log('[Debug ToggleGenOpts] recorderControls display AFTER: ' + recorderControls.style.display);
+            }
+            if (promptInput) {
+                console.log('[Debug ToggleGenOpts] Setting promptInput display to: none');
+                promptInput.style.display = 'none';
+                console.log('[Debug ToggleGenOpts] promptInput display AFTER: ' + promptInput.style.display);
+            }
+            // voiceOptionsContainer is already set to 'none' at the beginning of the function.
+            // We can re-affirm if needed for clarity or specific logic paths.
+            if (voiceOptionsContainer && voiceOptionsContainer.style.display !== 'none') {
+                 console.log('[Debug ToggleGenOpts] Setting voiceOptionsContainer display to: none (for STT)');
+                 voiceOptionsContainer.style.display = 'none';
+                 console.log('[Debug ToggleGenOpts] voiceOptionsContainer display AFTER: ' + voiceOptionsContainer.style.display);
+            }
+            if (promptLabel) {
+                promptLabel.textContent = 'Upload or Record Audio:';
+                console.log('[Debug ToggleGenOpts] Prompt label set to: Upload or Record Audio: (New value: ' + promptLabel.textContent + ')');
+            }
         }
     }
 
     // Video Options
-    const showVideo = generationType === 'video';
-    videoOptionsContainer.style.display = showVideo ? 'block' : 'none';
+    console.log('[Debug ToggleGenOpts] Processing Video Options visibility. showVideo: ' + showVideo);
+    if (videoOptionsContainer) {
+        const newDisplay = showVideo ? 'block' : 'none';
+        console.log('[Debug ToggleGenOpts] Setting videoOptionsContainer display to: ' + newDisplay);
+        videoOptionsContainer.style.display = newDisplay;
+        console.log('[Debug ToggleGenOpts] videoOptionsContainer display AFTER: ' + videoOptionsContainer.style.display);
+    }
     
     if (showVideo) {
-        promptInput.style.display = 'block';
-        if (promptLabel) promptLabel.textContent = 'Video Description:';
+        console.log('[Debug ToggleGenOpts] Entering showVideo block.');
+        if (promptInput) {
+            console.log('[Debug ToggleGenOpts] Setting promptInput display to: block');
+            promptInput.style.display = 'block';
+            console.log('[Debug ToggleGenOpts] promptInput display AFTER: ' + promptInput.style.display);
+        }
+        if (promptLabel) {
+            promptLabel.textContent = 'Video Description:';
+            console.log('[Debug ToggleGenOpts] Prompt label set to: Video Description: (New value: ' + promptLabel.textContent + ')');
+        }
     }
-
 
     // Text Options
     if (showText) {
-        promptInput.style.display = 'block';
-        if (promptLabel) promptLabel.textContent = 'Prompt:';
+        console.log('[Debug ToggleGenOpts] Entering showText block.');
+        if (promptInput) {
+            console.log('[Debug ToggleGenOpts] Setting promptInput display to: block');
+            promptInput.style.display = 'block';
+            console.log('[Debug ToggleGenOpts] promptInput display AFTER: ' + promptInput.style.display);
+        }
+        if (promptLabel) {
+            promptLabel.textContent = 'Prompt:';
+            console.log('[Debug ToggleGenOpts] Prompt label set to: Prompt: (New value: ' + promptLabel.textContent + ')');
+        }
     }
 
-    // Reset prompt label for image when selected
+    // This specific check for image ensures promptInput is visible and label is correct,
+    // even if other conditions (like showText) might have set it differently.
     if (generationType === 'image') {
-        promptInput.style.display = 'block';
-        if (promptLabel) promptLabel.textContent = 'Prompt / Image Description:';
+        console.log('[Debug ToggleGenOpts] Post-processing for Image Type (prompt label and input display).');
+        if (promptInput) {
+            console.log('[Debug ToggleGenOpts] Ensuring promptInput display is: block (for image type)');
+            promptInput.style.display = 'block';
+            console.log('[Debug ToggleGenOpts] promptInput display AFTER (image specific): ' + promptInput.style.display);
+        }
+        if (promptLabel) {
+            promptLabel.textContent = 'Prompt / Image Description:';
+            console.log('[Debug ToggleGenOpts] Prompt label set to: Prompt / Image Description: (New value: ' + promptLabel.textContent + ')');
+        }
     }
+
   // Reposition Model Name field based on generation type
+  console.log('[Debug ToggleGenOpts] Repositioning modelContainer.');
   if (showImage) {
+    console.log('[Debug ToggleGenOpts] Model reposition: Image block.');
     if (imageOptionsContainer && modelContainer && enableQualityContainer) {
+      console.log('[Debug ToggleGenOpts] Moving modelContainer. Target Parent: imageOptionsContainer, Reference Node: enableQualityContainer');
       imageOptionsContainer.insertBefore(modelContainer, enableQualityContainer);
+      console.log('[Debug ToggleGenOpts] modelContainer AFTER move. Parent: ' + (modelContainer.parentNode ? modelContainer.parentNode.id : 'null') +
+                  ', NextSibling: ' + (modelContainer.nextElementSibling ? modelContainer.nextElementSibling.id || modelContainer.nextElementSibling.className : 'null'));
     } else {
-      console.error('DOM structure error: Cannot place model container for image options. Elements missing.');
+      console.error('[Debug ToggleGenOpts] DOM structure error: Cannot place model container for image options. Elements missing or null.',
+                          { imageOptionsContainer, modelContainer, enableQualityContainer });
     }
   } else if (showAudio) {
-    const audioType = audioTypeSelect.value;
+    console.log('[Debug ToggleGenOpts] Model reposition: Audio block.');
+    const audioType = audioTypeSelect ? audioTypeSelect.value : null;
     if (audioType === 'tts') {
-      // TTS: model before voice input
+      console.log('[Debug ToggleGenOpts] Model reposition: Audio TTS.');
       if (voiceOptionsContainer && voiceOptionsContainer.parentNode && modelContainer) {
+        console.log('[Debug ToggleGenOpts] Moving modelContainer. Target Parent: ' + (voiceOptionsContainer.parentNode.id || voiceOptionsContainer.parentNode.tagName) + ', Reference Node: voiceOptionsContainer');
         voiceOptionsContainer.parentNode.insertBefore(modelContainer, voiceOptionsContainer);
+        console.log('[Debug ToggleGenOpts] modelContainer AFTER move. Parent: ' + (modelContainer.parentNode ? modelContainer.parentNode.id || modelContainer.parentNode.tagName : 'null') +
+                  ', NextSibling: ' + (modelContainer.nextElementSibling ? modelContainer.nextElementSibling.id : 'null'));
       } else {
-        console.error('DOM structure error: Cannot place model container for TTS audio options. Elements missing.');
+        console.error('[Debug ToggleGenOpts] DOM structure error: Cannot place model container for TTS audio options. Elements missing or null.',
+                              { voiceOptionsContainer, parentNode: voiceOptionsContainer ? voiceOptionsContainer.parentNode : 'N/A', modelContainer });
       }
-    } else {
-      // STT: model before audio file/recorder inputs
+    } else { // STT
+      console.log('[Debug ToggleGenOpts] Model reposition: Audio STT.');
       if (audioOptionsContainer && modelContainer && sttInputContainer) {
+        console.log('[Debug ToggleGenOpts] Moving modelContainer. Target Parent: audioOptionsContainer, Reference Node: sttInputContainer');
         audioOptionsContainer.insertBefore(modelContainer, sttInputContainer);
+        console.log('[Debug ToggleGenOpts] modelContainer AFTER move. Parent: ' + (modelContainer.parentNode ? modelContainer.parentNode.id : 'null') +
+                  ', NextSibling: ' + (modelContainer.nextElementSibling ? modelContainer.nextElementSibling.id : 'null'));
       } else {
-        console.error('DOM structure error: Cannot place model container for STT audio options. Elements missing.');
+        console.error('[Debug ToggleGenOpts] DOM structure error: Cannot place model container for STT audio options. Elements missing or null.',
+                              { audioOptionsContainer, modelContainer, sttInputContainer });
       }
     }
   } else if (showVideo) {
-    // Video: model at the beginning of video options
-    if (videoOptionsContainer && modelContainer && videoOptionsContainer.firstElementChild) {
-      videoOptionsContainer.insertBefore(modelContainer, videoOptionsContainer.firstElementChild);
-    } else if (videoOptionsContainer && modelContainer) { // If no children, append
-      videoOptionsContainer.appendChild(modelContainer);
+    console.log('[Debug ToggleGenOpts] Model reposition: Video block.');
+    if (videoOptionsContainer && modelContainer) {
+      const referenceNode = videoOptionsContainer.firstElementChild;
+      console.log('[Debug ToggleGenOpts] Moving modelContainer. Target Parent: videoOptionsContainer, Reference Node: ' + (referenceNode ? referenceNode.id || referenceNode.tagName : 'null (append)'));
+      if (referenceNode) {
+        videoOptionsContainer.insertBefore(modelContainer, referenceNode);
+      } else {
+        videoOptionsContainer.appendChild(modelContainer);
+      }
+      console.log('[Debug ToggleGenOpts] modelContainer AFTER move. Parent: ' + (modelContainer.parentNode ? modelContainer.parentNode.id : 'null') +
+                  ', NextSibling: ' + (modelContainer.nextElementSibling ? modelContainer.nextElementSibling.id || modelContainer.nextElementSibling.tagName : 'null'));
     } else {
-      console.error('DOM structure error: Cannot place model container for video options. Elements missing.');
+      console.error('[Debug ToggleGenOpts] DOM structure error: Cannot place model container for video options. Elements missing or null.',
+                          { videoOptionsContainer, modelContainer });
     }
   } else { // Default position (e.g., for Text generation)
-    if (modelContainerOriginalParent && modelContainer) {
-      // modelContainerOriginalNextSibling can be null if it was the last element
-      modelContainerOriginalParent.insertBefore(modelContainer, modelContainerOriginalNextSibling);
-    } else {
-      console.error('DOM structure error: Cannot return model container to its original position. Original parent missing.');
+      const promptLabelElement = document.getElementById('prompt-label');
+      if (promptLabelElement && promptLabelElement.parentNode && modelContainer) {
+        console.log('[Debug ToggleGenOpts] Moving modelContainer to default position before prompt-label.');
+        promptLabelElement.parentNode.insertBefore(modelContainer, promptLabelElement);
+        console.log('[Debug ToggleGenOpts] modelContainer AFTER move. Parent: ' + (modelContainer.parentNode ? modelContainer.parentNode.id || modelContainer.parentNode.tagName : 'null') +
+                        ', NextSibling: ' + (modelContainer.nextElementSibling ? modelContainer.nextElementSibling.id || modelContainer.nextElementSibling.tagName : 'null'));
+      } else {
+        console.warn('[Debug ToggleGenOpts] prompt-label not found or modelContainer missing, attempting fallback to original parent.');
+        if (modelContainerOriginalParent && modelContainer) {
+            console.log('[Debug ToggleGenOpts] Fallback: Appending modelContainer to modelContainerOriginalParent.');
+            modelContainerOriginalParent.appendChild(modelContainer);
+            console.warn('[Debug ToggleGenOpts] Returned modelContainer to end of original parent as fallback.');
+        } else {
+            console.error('[Debug ToggleGenOpts] DOM structure error: Cannot return model container to its original position (original parent or modelContainer missing).');
+        }
+      }
     }
-  }
+  console.log('[Debug ToggleGenOpts] Exiting.');
 }
 
 // Microphone permission status
@@ -738,14 +900,15 @@ async function callTextApi(provider, apiKey, baseUrl, model, prompt) {
     let apiUrl = '';
     let headers = {};
     let body = {};
+    const streamEnabled = enableStreamingCheckbox ? enableStreamingCheckbox.checked : true; // Default to true if checkbox not found
+
 
     // Configure based on provider
     switch (provider) {
         case 'openai':
             apiUrl = 'https://api.openai.com/v1/chat/completions';
             headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` };
-            // Enable streaming for OpenAI
-            body = { model: model, messages: [{ role: 'user', content: prompt }], stream: true };
+            body = { model: model, messages: [{ role: 'user', content: prompt }], stream: streamEnabled };
             break;
         case 'deepseek':
             apiUrl = 'https://api.deepseek.com/chat/completions';
@@ -760,18 +923,17 @@ async function callTextApi(provider, apiKey, baseUrl, model, prompt) {
             const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
             apiUrl = `${cleanBaseUrl}/chat/completions`;
             headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` };
-            // Enable streaming for OpenAI compatible
-            body = { model: model, messages: [{ role: 'user', content: prompt }], stream: true };
+            body = { model: model, messages: [{ role: 'user', content: prompt }], stream: streamEnabled };
             break;
         case 'claude':
             apiUrl = 'https://api.anthropic.com/v1/messages';
             headers = { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' };
-            body = { model: model, max_tokens: 1024, messages: [{ role: 'user', content: prompt }] };
+            body = { model: model, max_tokens: 1024, messages: [{ role: 'user', content: prompt }] }; // Claude doesn't support streaming in the same way via 'stream' flag
             break;
         case 'openrouter':
             apiUrl = 'https://openrouter.ai/api/v1/chat/completions';
             headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` };
-            body = { model: model, messages: [{ role: 'user', content: prompt }], stream: false };
+            body = { model: model, messages: [{ role: 'user', content: prompt }], stream: false }; // OpenRouter might vary by model, default to non-streaming for safety
             break;
         case 'voidai_api':
             apiUrl = 'https://api.voidai.app/v1/chat/completions';
@@ -1912,16 +2074,41 @@ qualitySelect.addEventListener('change', () => {
 // Code that runs when the DOM is fully loaded.
 
 // Initial checks before DOMContentLoaded
+console.log('[Debug Init] Before DOMContentLoaded: Calling toggleBaseUrlInput and toggleGenerationOptions for initial setup.');
 toggleBaseUrlInput();
-toggleGenerationOptions(); // Initialize generation options visibility on load
+// toggleGenerationOptions(); // Initialize generation options visibility on load - This call might be problematic if elements are not fully ready or settings not loaded.
+console.log('[Debug Init] Before DOMContentLoaded: Initial call to toggleBaseUrlInput finished.');
 
 // Initial Load and Setup
 document.addEventListener('DOMContentLoaded', async () => {
-    initializeTheme(); // Initialize theme handling
-    await loadGeneralSettings(); // Load general UI settings first
-    await loadProviderCredentials(providerSelect.value); // Then load creds for the (potentially loaded) provider
-    toggleBaseUrlInput(); // From original code
-    toggleGenerationOptions(); // From original code
+    console.log('[Debug DOMContentLoaded] DOM fully loaded and parsed.');
+    // Initialize theme handling first as it affects base styles
+    initializeTheme();
+    console.log('[Debug DOMContentLoaded] initializeTheme finished.');
+
+    // Load general settings, which includes provider, model, prompt, and importantly, the last generation type.
+    // loadGeneralSettings itself calls toggleGenerationOptions at its end.
+    console.log('[Debug DOMContentLoaded] Calling loadGeneralSettings...');
+    await loadGeneralSettings();
+    console.log('[Debug DOMContentLoaded] loadGeneralSettings finished (this should have called toggleGenerationOptions).');
+
+    // Load credentials for the potentially loaded provider.
+    console.log('[Debug DOMContentLoaded] Calling loadProviderCredentials...');
+    await loadProviderCredentials(providerSelect.value);
+    console.log('[Debug DOMContentLoaded] loadProviderCredentials finished.');
+
+    // toggleBaseUrlInput depends on providerSelect.value, which is set by loadGeneralSettings.
+    console.log('[Debug DOMContentLoaded] Calling toggleBaseUrlInput (after settings and credentials load)...');
+    toggleBaseUrlInput();
+    console.log('[Debug DOMContentLoaded] toggleBaseUrlInput finished (after settings and credentials load).');
+
+    // Note: toggleGenerationOptions() is called within loadGeneralSettings().
+    // If an explicit call here is still desired for some reason (e.g. to ensure it runs *after* provider creds),
+    // it can be added, but it might be redundant if loadGeneralSettings already correctly set up the UI.
+    // For now, rely on the call from loadGeneralSettings.
+    // console.log('[Debug DOMContentLoaded] Optionally, calling toggleGenerationOptions again if needed...');
+    // toggleGenerationOptions();
+    // console.log('[Debug DOMContentLoaded] Optional toggleGenerationOptions call finished.');
     
     // Check microphone permission on load and update UI
     await checkMicrophonePermission();
@@ -1934,11 +2121,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     modelInput.addEventListener('input', saveGeneralSettings);
     promptInput.addEventListener('input', saveGeneralSettings);
+    if (enableStreamingCheckbox) enableStreamingCheckbox.addEventListener('change', saveGeneralSettings); // Added for streaming toggle
+
 
     document.querySelectorAll('input[name="generation-type"]').forEach(radio => {
         radio.addEventListener('change', async () => {
+            console.log('[Debug Event] Generation type changed. Value: ' + radio.value);
+            console.log('[Debug Event] Calling saveGeneralSettings...');
             await saveGeneralSettings();
-            toggleGenerationOptions(); // existing call, this will correctly show/hide sections
+            console.log('[Debug Event] saveGeneralSettings finished. Calling toggleGenerationOptions for generation type change...');
+            toggleGenerationOptions();
+            console.log('[Debug Event] toggleGenerationOptions finished for generation type change.');
         });
     });
 
@@ -1956,8 +2149,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (qualitySelect) qualitySelect.addEventListener('change', async () => {
         // When quality dropdown changes, update visibility of custom input if quality is enabled
-        if (customQualityInput) {
-            customQualityInput.style.display = (enableQualityCheckbox.checked && qualitySelect.value === 'custom') ? 'block' : 'none';
+        if (customQualityInput && enableQualityCheckbox) { // ensure enableQualityCheckbox exists
+            const newDisplay = (enableQualityCheckbox.checked && qualitySelect.value === 'custom') ? 'block' : 'none';
+            console.log('[Debug Event] Quality select changed. Setting customQualityInput display to: ' + newDisplay);
+            customQualityInput.style.display = newDisplay;
         }
         await saveGeneralSettings(); // Save quality select state
     });
@@ -1966,8 +2161,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (imageWidthInput) imageWidthInput.addEventListener('input', saveGeneralSettings);
     if (imageHeightInput) imageHeightInput.addEventListener('input', saveGeneralSettings);
     if (audioTypeSelect) audioTypeSelect.addEventListener('change', async () => {
+        console.log('[Debug Event] Audio type select changed. Value: ' + audioTypeSelect.value);
+        console.log('[Debug Event] Calling saveGeneralSettings...');
         await saveGeneralSettings();
-        toggleGenerationOptions(); // existing call
+        console.log('[Debug Event] saveGeneralSettings finished. Calling toggleGenerationOptions for audio type change...');
+        toggleGenerationOptions();
+        console.log('[Debug Event] toggleGenerationOptions finished for audio type change.');
     });
     if (voiceInput) voiceInput.addEventListener('input', saveGeneralSettings);
 
@@ -1993,3 +2192,5 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.warn('New window button present, but Electron API for sending messages is not available.');
     }
 });
+
+[end of script.js]
